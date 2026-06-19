@@ -1,0 +1,6 @@
+{
+  "name": "nongsaro-farmmap-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "우리밭 팜맵 매니저 - 농사로/팜맵 API 프록시"
+}
