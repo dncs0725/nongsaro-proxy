@@ -38,9 +38,13 @@ export default async function handler(req, res) {
       if (!fileUrl) { res.status(400).json({ proxyError: "u(파일URL) 파라미터 필요" }); return; }
       const r = await fetch(fileUrl);
       const buf = Buffer.from(await r.arrayBuffer());
-      const ct = r.headers.get("content-type") || "application/pdf";
+      // 원본 content-type이 octet-stream이면 PDF로 강제(농사로가 종종 일반 바이너리로 줌)
+      let ct = r.headers.get("content-type") || "application/pdf";
+      if (/octet-stream/i.test(ct)) ct = "application/pdf";
       res.setHeader("Content-Type", ct);
-      res.setHeader("Content-Disposition", "inline"); // 다운로드 대신 화면 표시
+      // 다운로드 대신 화면 표시 강제 + 파일명 명시(브라우저가 inline 뷰어로 열도록)
+      res.setHeader("Content-Disposition", 'inline; filename="nongsaro.pdf"');
+      res.setHeader("X-Content-Type-Options", "nosniff");
       res.status(r.status).send(buf);
       return;
     } else if (target === "nongsaro") {
