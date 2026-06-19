@@ -3,8 +3,9 @@
 //      /api/proxy?target=farmmap&path=getFarmmapSoilAnalysisService/getCoordinateBasedSoilAnalsInfo&positionX=..&...
 //
 // 환경변수(Vercel 프로젝트 Settings → Environment Variables):
-//   NONGSARO_KEY = 농사로 인증키
-//   PORTAL_KEY   = 공공데이터포털 Decoding 키
+//   NONGSARO_KEY = 농사로 인증키 (텃밭·주간농사·병해충 공통)
+//   CROPEBOOK_KEY = 작목별농업기술정보 전용 인증키 (서비스별 키가 다른 경우)
+//   PORTAL_KEY   = 공공데이터포털 Decoding 키 (팜맵용)
 //
 // Vercel은 Node.js 환경이라 농사로의 http:// 호출이 정상 동작합니다.
 
@@ -31,8 +32,11 @@ export default async function handler(req, res) {
 
     let upstream;
     if (target === "nongsaro") {
-      if (!process.env.NONGSARO_KEY) { res.status(500).json({ proxyError: "NONGSARO_KEY 미설정" }); return; }
-      params.set("apiKey", process.env.NONGSARO_KEY);
+      // 작목별(cropEbook)은 전용 키, 나머지는 공통 키 사용
+      const isCropEbook = path.startsWith("cropEbook");
+      const key = isCropEbook ? process.env.CROPEBOOK_KEY : process.env.NONGSARO_KEY;
+      if (!key) { res.status(500).json({ proxyError: (isCropEbook ? "CROPEBOOK_KEY" : "NONGSARO_KEY") + " 미설정" }); return; }
+      params.set("apiKey", key);
       upstream = `http://api.nongsaro.go.kr/service/${path}?${params}`;
     } else if (target === "farmmap") {
       if (!process.env.PORTAL_KEY) { res.status(500).json({ proxyError: "PORTAL_KEY 미설정" }); return; }
