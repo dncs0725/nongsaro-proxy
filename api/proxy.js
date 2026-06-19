@@ -18,7 +18,7 @@ export default async function handler(req, res) {
 
   try {
     const { target, path = "", ...rest } = req.query;
-    if (!target || !path) {
+    if (!target || (!path && target !== "file")) {
       res.status(400).json({ proxyError: "target과 path 파라미터가 필요합니다" });
       return;
     }
@@ -31,7 +31,19 @@ export default async function handler(req, res) {
     }
 
     let upstream;
-    if (target === "nongsaro") {
+    if (target === "file") {
+      // 농사로 첨부파일(PDF 등) 중계: ?target=file&u=<인코딩된 원본URL>
+      // http 파일을 https로 받아 화면에 표시할 수 있게 함. 키 불필요.
+      const fileUrl = req.query.u;
+      if (!fileUrl) { res.status(400).json({ proxyError: "u(파일URL) 파라미터 필요" }); return; }
+      const r = await fetch(fileUrl);
+      const buf = Buffer.from(await r.arrayBuffer());
+      const ct = r.headers.get("content-type") || "application/pdf";
+      res.setHeader("Content-Type", ct);
+      res.setHeader("Content-Disposition", "inline"); // 다운로드 대신 화면 표시
+      res.status(r.status).send(buf);
+      return;
+    } else if (target === "nongsaro") {
       // 작목별(cropEbook)은 전용 키, 나머지는 공통 키 사용
       const isCropEbook = path.startsWith("cropEbook");
       const key = isCropEbook ? process.env.CROPEBOOK_KEY : process.env.NONGSARO_KEY;
