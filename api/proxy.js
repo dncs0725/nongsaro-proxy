@@ -7,8 +7,7 @@
 //   CROPEBOOK_KEY = 작목별농업기술정보 전용 인증키 (서비스별 키가 다른 경우)
 //   PORTAL_KEY   = 공공데이터포털 Decoding 키 (팜맵용)
 //
-// Vercel은 Node.js 환경이라 농사로의 http:// 호출이 정상 동작합니다.
-
+// Vercel은 Node.js 환경이라 농사로의 http:// 호출이 정상 동작합니다.ㅑ
 export default async function handler(req, res) {
   // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -33,20 +32,38 @@ export default async function handler(req, res) {
     let upstream;
     if (target === "file") {
       // 농사로 첨부파일(PDF 등) 중계: ?target=file&u=<인코딩된 원본URL>
-      // http 파일을 https로 받아 화면에 표시할 수 있게 함. 키 불필요.
       const fileUrl = req.query.u;
       if (!fileUrl) { res.status(400).json({ proxyError: "u(파일URL) 파라미터 필요" }); return; }
-      const r = await fetch(fileUrl);
-      const buf = Buffer.from(await r.arrayBuffer());
-      // 원본 content-type이 octet-stream이면 PDF로 강제(농사로가 종종 일반 바이너리로 줌)
+
+      // 클라이언트(PDF.js)의 Range 요청을 농사로로 그대로 전달 → 부분 다운로드 지원
+      const fwdHeaders = {};
+      if (req.headers.range) fwdHeaders.range = req.headers.range;
+
+      const r = await fetch(fileUrl, { headers: fwdHeaders });
+
+      // content-type 보정 (octet-stream이면 PDF로)
       let ct = r.headers.get("content-type") || "application/pdf";
       if (/octet-stream/i.test(ct)) ct = "application/pdf";
       res.setHeader("Content-Type", ct);
-      // 다운로드 대신 화면 표시 강제 + 파일명 명시(브라우저가 inline 뷰어로 열도록)
       res.setHeader("Content-Disposition", 'inline; filename="nongsaro.pdf"');
       res.setHeader("X-Content-Type-Options", "nosniff");
+
+      // range 관련 헤더를 클라이언트로 그대로 전달 (PDF.js가 부분 요청을 쓰게 함)
+      const acceptRanges = r.headers.get("accept-ranges");
+      const contentRange = r.headers.get("content-range");
+      const contentLength = r.headers.get("content-length");
+      // 캐시 허용(같은 책 다시 열 때 빨라짐)
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      if (acceptRanges) res.setHeader("Accept-Ranges", acceptRanges);
+      else res.setHeader("Accept-Ranges", "bytes"); // 농사로가 안 알려줘도 시도하게
+      if (contentRange) res.setHeader("Content-Range", contentRange);
+      if (contentLength) res.setHeader("Content-Length", contentLength);
+
+      const buf = Buffer.from(await r.arrayBuffer());
+      // 농사로가 부분 응답(206)을 주면 그대로, 아니면 200
       res.status(r.status).send(buf);
       return;
+    }
     } else if (target === "nongsaro") {
       // 작목별(cropEbook)은 전용 키, 나머지는 공통 키 사용
       const isCropEbook = path.startsWith("cropEbook");
