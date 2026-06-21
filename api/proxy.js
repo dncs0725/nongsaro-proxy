@@ -7,12 +7,12 @@
 //   CROPEBOOK_KEY = 작목별농업기술정보 전용 인증키 (서비스별 키가 다른 경우)
 //   PORTAL_KEY   = 공공데이터포털 Decoding 키 (팜맵용)
 //
-// Vercel은 Node.js 환경이라 농사로의 http:// 호출이 정상 동작합니다.ㅑ
+// Vercel은 Node.js 환경이라 농사로의 http:// 호출이 정상 동작합니다.
 export default async function handler(req, res) {
   // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Range");
   if (req.method === "OPTIONS") { res.status(200).end(); return; }
 
   try {
@@ -52,10 +52,9 @@ export default async function handler(req, res) {
       const acceptRanges = r.headers.get("accept-ranges");
       const contentRange = r.headers.get("content-range");
       const contentLength = r.headers.get("content-length");
-      // 캐시 허용(같은 책 다시 열 때 빨라짐)
       res.setHeader("Cache-Control", "public, max-age=86400");
       if (acceptRanges) res.setHeader("Accept-Ranges", acceptRanges);
-      else res.setHeader("Accept-Ranges", "bytes"); // 농사로가 안 알려줘도 시도하게
+      else res.setHeader("Accept-Ranges", "bytes");
       if (contentRange) res.setHeader("Content-Range", contentRange);
       if (contentLength) res.setHeader("Content-Length", contentLength);
 
@@ -63,7 +62,6 @@ export default async function handler(req, res) {
       // 농사로가 부분 응답(206)을 주면 그대로, 아니면 200
       res.status(r.status).send(buf);
       return;
-    }
     } else if (target === "nongsaro") {
       // 작목별(cropEbook)은 전용 키, 나머지는 공통 키 사용
       const isCropEbook = path.startsWith("cropEbook");
