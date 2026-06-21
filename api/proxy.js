@@ -47,20 +47,33 @@ export default async function handler(req, res) {
       res.setHeader("Content-Type", ct);
       res.setHeader("Content-Disposition", 'inline; filename="nongsaro.pdf"');
       res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "public, max-age=86400");
 
-      // range 관련 헤더를 클라이언트로 그대로 전달 (PDF.js가 부분 요청을 쓰게 함)
+      // range 관련 헤더를 클라이언트로 그대로 전달
       const acceptRanges = r.headers.get("accept-ranges");
       const contentRange = r.headers.get("content-range");
       const contentLength = r.headers.get("content-length");
-      res.setHeader("Cache-Control", "public, max-age=86400");
       if (acceptRanges) res.setHeader("Accept-Ranges", acceptRanges);
-      else res.setHeader("Accept-Ranges", "bytes");
       if (contentRange) res.setHeader("Content-Range", contentRange);
       if (contentLength) res.setHeader("Content-Length", contentLength);
 
-      const buf = Buffer.from(await r.arrayBuffer());
-      // 농사로가 부분 응답(206)을 주면 그대로, 아니면 200
-      res.status(r.status).send(buf);
+      res.status(r.status);
+
+      // 받으면서 즉시 흘려보내기(스트리밍) — 다 받을 때까지 기다리지 않음
+      // → 사용자 화면에 진행률이 처음부터 차오름(멍때림 구간 제거)
+      if (r.body && typeof r.body.getReader === "function") {
+        const reader = r.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(Buffer.from(value));
+        }
+        res.end();
+      } else {
+        // 스트림 미지원 환경 폴백: 통째로 받아서 전송
+        const buf = Buffer.from(await r.arrayBuffer());
+        res.send(buf);
+      }
       return;
     } else if (target === "nongsaro") {
       // 작목별(cropEbook)은 전용 키, 나머지는 공통 키 사용
